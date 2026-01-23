@@ -1,118 +1,114 @@
+# FrostByte Logistics – Database Schema Documentation
+
+This document describes the database schema used for the FrostByte Logistics platform.
+The schema is designed to support validation of delivery feasibility based on
+location connectivity, temperature compatibility, storage capacity, and demand constraints.
+
+---
+
 ## 1. locations
 
-Stores all warehouse locations used by the logistics network.
+Stores all physical locations in the logistics network such as warehouses and client sites.
 
-| COLUMN_NAME   | DATA_TYPE     | NULLABLE | DATA_DEFAULT  | CONSTRAINTS                          | COMMENTS 
-|---------------|---------------|----------|---------------|--------------------------------------|----------
-| id            | SERIAL        | No       | auto          | PRIMARY KEY                          |Primary key of location table
-| name          | VARCHAR(100)  | No       | null          |     -                                |Warehouse Name
-| cold_capacity | INTEGER       | No       | null          | CHECK (cold_capacity ≥ 0)            |Cold storage capacity of the location.
+| COLUMN_NAME | DATA_TYPE     | NULLABLE | DATA_DEFAULT        | CONSTRAINTS        | COMMENTS |
+|------------|---------------|----------|---------------------|--------------------|----------|
+| id         | UUID          | No       | uuid_generate_v4()  | PRIMARY KEY        | Unique identifier for each location. |
+| name       | VARCHAR(100)  | No       | null                | —                  | Name of the location. |
+| type       | VARCHAR(50)   | No       | null                | —                  | Type of location (Warehouse, Hospital, Retailer, etc.). |
+| city       | VARCHAR(100)  | No       | null                | —                  | City where the location is situated. |
 
 ### Purpose
-Represents warehouses that store temperature-sensitive goods.  
-Cold capacity is used to ensure storage limits are not exceeded.
+Represents all nodes in the logistics network.  
+Locations act as sources, transit points, and destinations for shipments.
 
 ---
 
 ## 2. products
 
-Stores all products that can be transported in the network.
+Stores all products that can be transported through the logistics network.
 
-| COLUMN_NAME   | DATA_TYPE     | NULLABLE | DATA_DEFAULT | CONSTRAINTS               | COMMENTS 
-|---------------|---------------|----------|--------------|---------------------------|----------
-| id            | SERIAL        | No       | auto         | PRIMARY KEY               | Primary key of products table. 
-| name          | VARCHAR(100)  | No       | null         | —                         | Name of the product. 
-| required_temp | INTEGER       | No       | null         | —                         | Required temperature for this product. 
+| COLUMN_NAME      | DATA_TYPE | NULLABLE | DATA_DEFAULT       | CONSTRAINTS | COMMENTS |
+|------------------|-----------|----------|--------------------|-------------|----------|
+| id               | UUID      | No       | uuid_generate_v4() | PRIMARY KEY | Unique identifier for each product. |
+| name             | VARCHAR(100) | No    | null               | —           | Name of the product. |
+| min_temperature  | INTEGER   | No       | null               | —           | Minimum temperature required for safe transport. |
+| max_temperature  | INTEGER   | No       | null               | —           | Maximum temperature allowed for safe transport. |
 
 ### Purpose
-Defines what products exist and their temperature requirements.  
-Used to validate route compatibility.
+Defines the temperature requirements for each product.  
+Used to ensure products are only stored and transported in compatible environments.
 
 ---
 
-## 3. clients
+## 3. storage_units
 
-Stores delivery destination entities such as hospitals or retailers.
+Stores cold-storage units available at each location.
 
-| COLUMN_NAME| DATA_TYPE    | NULLABLE | DATA_DEFAULT | CONSTRAINTS  | COMMENTS
-|------------|--------------|----------|--------------|--------------|----------
-| id         | SERIAL       | No       | auto         | PRIMARY KEY  | Primary key of clients table. 
-| name       | VARCHAR(100) | No       | null         | —            | Name of the client. 
-| type       | VARCHAR(50)  | No       | null         | —            | Type of client (Hospital, Retailer, etc.). 
+| COLUMN_NAME      | DATA_TYPE | NULLABLE | DATA_DEFAULT       | CONSTRAINTS | COMMENTS |
+|------------------|-----------|----------|--------------------|-------------|----------|
+| id               | UUID      | No       | uuid_generate_v4() | PRIMARY KEY | Unique identifier for the storage unit. |
+| location_id      | UUID      | No       | null               | FK → locations(id) | Location where the storage unit exists. |
+| min_temperature  | INTEGER   | No       | null               | —           | Minimum temperature supported by this storage unit. |
+| max_temperature  | INTEGER   | No       | null               | —           | Maximum temperature supported by this storage unit. |
+| capacity         | INTEGER   | No       | null               | CHECK (capacity ≥ 0) | Maximum quantity the unit can store. |
 
 ### Purpose
-Represents clients who receive deliveries.
+Represents cold-storage facilities at locations.  
+Used to ensure products can be safely stored without exceeding capacity limits.
 
 ---
 
 ## 4. routes
 
-Stores transportation routes between locations.
+Stores transportation routes between two locations.
 
-| COLUMN_NAME   | DATA_TYPE | NULLABLE | DATA_DEFAULT | CONSTRAINTS | COMMENTS 
-|---------------|-----------|----------|--------------|-------------|----------
-| id            | SERIAL    | No       | auto         | PRIMARY KEY | Primary key of routes table. 
-| from_location | INTEGER   | No       | null         | FK → locations(id) | Source location of the route. 
-| to_location   | INTEGER   | No       | null         | FK → locations(id) | Destination location of the route. 
-| max_capacity  | INTEGER   | No       | null         | CHECK (max_capacity ≥ 0) | Maximum transport capacity of the route. 
-| min_temp      | INTEGER   | No       | null         | CHECK (min_temp ≤ max_temp) | Minimum supported temperature. 
-| max_temp      | INTEGER   | No       | null         | CHECK (max_temp ≥ min_temp) | Maximum supported temperature. 
+| COLUMN_NAME        | DATA_TYPE | NULLABLE | DATA_DEFAULT       | CONSTRAINTS | COMMENTS |
+|--------------------|-----------|----------|--------------------|-------------|----------|
+| id                 | UUID      | No       | uuid_generate_v4() | PRIMARY KEY | Unique identifier for the route. |
+| from_location_id   | UUID      | No       | null               | FK → locations(id) | Starting location of the route. |
+| to_location_id     | UUID      | No       | null               | FK → locations(id) | Ending location of the route. |
+| capacity           | INTEGER   | No       | null               | CHECK (capacity ≥ 0) | Maximum shipment capacity on this route. |
+| min_shipment       | INTEGER   | No       | 0                  | —           | Minimum shipment quantity required on this route. |
 
 ### Purpose
-Defines how goods move between locations.  
-Used to ensure both **capacity limits** and **temperature constraints** are respected.
+Defines how goods can move between locations.  
+Used to validate whether routes can handle required shipment quantities.
 
 ---
 
-## 5. inventory
+## 5. demands
 
-Stores available product quantities at each location.
+Stores product demand requirements for locations on specific dates.
 
-| COLUMN_NAME | DATA_TYPE | NULLABLE | DATA_DEFAULT | CONSTRAINTS | COMMENTS 
-|-------------|-----------|----------|--------------|-------------|----------
-| id          | SERIAL    | No       | auto         | PRIMARY KEY | Primary key of inventory table. 
-| location_id | INTEGER   | No       | null         | FK → locations(id), UNIQUE(location_id, product_id) | Location storing the product. 
-| product_id  | INTEGER   | No       | null         | FK → products(id), UNIQUE(location_id, product_id) | Product stored at the location. 
-| quantity    | INTEGER   | No       | null         | CHECK (quantity ≥ 0) | Available quantity of the product. 
+| COLUMN_NAME   | DATA_TYPE | NULLABLE | DATA_DEFAULT       | CONSTRAINTS | COMMENTS |
+|---------------|-----------|----------|--------------------|-------------|----------|
+| id            | UUID      | No       | uuid_generate_v4() | PRIMARY KEY | Unique identifier for the demand record. |
+| location_id   | UUID      | No       | null               | FK → locations(id) | Location requesting the product. |
+| product_id    | UUID      | No       | null               | FK → products(id) | Product being requested. |
+| date          | DATE      | No       | null               | —           | Date on which the demand applies. |
+| min_quantity  | INTEGER   | No       | 1                  | —           | Minimum quantity that must be delivered. |
+| max_quantity  | INTEGER   | No       | null               | —           | Maximum quantity that can be delivered. |
 
 ### Purpose
-Tracks how much of each product is available at each location.  
-Ensures no duplicate inventory rows for the same location-product pair.
+Represents delivery requirements for products at specific locations and dates.  
+Used as the demand input when validating whether a delivery plan is feasible.
 
 ---
 
-## 6. delivery_requests
+## Relationship Summary
 
-Stores delivery requests submitted by clients.
-
-| COLUMN_NAME| DATA_TYPE    | NULLABLE | DATA_DEFAULT |       CONSTRAINTS             | COMMENTS 
-|------------|--------------|----------|--------------|-------------------------------|----------
-| id         | SERIAL       | No       | auto         | PRIMARY KEY                   | Primary key of delivery_requests table. 
-| product_id | INTEGER      | No       | null         | FK → products(id)             | Requested product. 
-| route_id   | INTEGER      | No       | null         | FK → routes(id)               | Route used for delivery. 
-| client_id  | INTEGER      | No       | null         | FK → clients(id)              | Client requesting the delivery. 
-| quantity   | INTEGER      | No       | null         | CHECK (quantity > 0)          | Requested quantity. 
-| status     | VARCHAR(20)  | No       | 'PENDING'    | CHECK (status IN ('PENDING',  | Current request status.
-|            |              |          |              | 'APPROVED','REJECTED'))       |  
-
-### Purpose
-Represents delivery plans that must be validated before execution.  
-Requests are approved or rejected based on capacity and temperature checks.
+- **locations** are referenced by:
+  - `storage_units`
+  - `routes`
+  - `demands`
+- **products** are referenced by:
+  - `demands`
+- **storage_units** define storage constraints per location
+- **routes** define transport constraints between locations
+- **demands** define minimum and maximum delivery requirements
 
 ---
 
-## 7. approved_shipments
-
-Stores approved delivery requests.
-
-| COLUMN_NAME | DATA_TYPE | NULLABLE | DATA_DEFAULT | CONSTRAINTS                         | COMMENTS 
-|-------------|-----------|----------|--------------|-------------------------------------|----------
-| id          | SERIAL    | No       | auto         | PRIMARY KEY                         | Primary key of approved_shipments table. 
-| request_id  | INTEGER   | No       | null         | FK → delivery_requests(id), UNIQUE  | Approved delivery request. 
-| approved_at | TIMESTAMP | No       | NOW()        | —                                   | Time when the request was approved. 
-
-### Purpose
-Confirms that a delivery request has passed validation.  
-Guarantees that each request can be approved **only once**.
-
----
+This schema allows the system to evaluate whether delivery demands can be satisfied
+without violating storage, routing, or temperature constraints, enabling safe refusal
+of infeasible delivery plans.
