@@ -44,6 +44,9 @@ def execute_query(query, params=None, fetch_one=False, fetch_all=False):
         cur.close()
         conn.close()
 
+@app.route('/')
+def home():
+    return "Hello, World!" 
 
 @app.route('/locations', methods=['POST'])
 def create_location():
