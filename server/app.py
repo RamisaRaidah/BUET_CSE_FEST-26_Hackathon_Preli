@@ -7,19 +7,23 @@ app = Flask(__name__)
 
 
 def get_db_connection():
-    db_host = os.environ.get('DATABASE_HOST', 'db')
+    database_url = os.environ.get('DATABASE_URL')
+    
     try:
-        conn = psycopg2.connect(
-            host=db_host,
-            database="frostbyte",
-            user="postgres",
-            password="postgres"
-        )
+        if database_url:
+            conn = psycopg2.connect(database_url)
+        else:
+            conn = psycopg2.connect(
+                host="db",
+                database="frostbyte",
+                user="postgres",
+                password="postgres"
+            )
         return conn
     except Exception as e:
         print(f"Database connection failed: {e}")
         return None
-
+    
 
 def execute_query(query, params=None, fetch_one=False, fetch_all=False):
     conn = get_db_connection()
